@@ -26,14 +26,13 @@ st.markdown("## User Inputs:")
 
 wd_path = st.text_input("Provid the path of project directory:")
 st.write(type(wd_path))
+os.chdir(wd_path)
 
-
-def find_rch_files(wd):
-    rch_files = []
-    for filename in glob.glob(str(wd)+"/*.RCH"):
-        rch_files.append(os.path.basename(filename))
-    return rch_files
-
-dd = find_rch_files(wd_path)
-st.write(dd)
+# def find_rch_files(wd):
+#     rch_files = []
+#     for filename in glob.glob(str(wd)+"/*.RCH"):
+#         rch_files.append(os.path.basename(filename))
+#     return rch_files
+# dd = find_rch_files(wd_path)
+# st.write(dd)
 st.write(os.getcwd())
