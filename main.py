@@ -1,18 +1,26 @@
 import logging
 import plotly.express as px
+import geopandas as gpd
 import streamlit as st
 import os
 import pandas as pd
 import base64
 import numpy as np
 import glob
+import datetime
+# import utils
+import time
+from io import StringIO
+from shapely.geometry import shape
+import json
+import xmltodict
 import utils
 
 pd.options.mode.chained_assignment = None
 
 LINE = """<style>
 .vl {
-  border-left: 2px solid black;
+  border-left: 2px solid gray;
   height: 100px;
   position: absolute;
   left: 50%;
@@ -21,110 +29,95 @@ LINE = """<style>
 }
 </style>
 <div class="vl"></div>"""
+
 st.set_page_config(
     layout="wide",
     initial_sidebar_state='collapsed',
-    page_title='CRB APEX-MODFLOW',
+    page_title='APEX Visualization',
     page_icon='icon2.png' 
     )
+st.title('APEX Model - Biomass Analysis')
+st.markdown("## User Inputs:")
+col1, line, col2, line2, col3 = st.beta_columns([0.3,0.05,0.3,0.05,0.3])
 
-st.title('CRB APEX-MODFLOW model performance')
-st.markdown("""
-This app helps analyze CRB APEX-MODFLOW model performance.
-- **Main Python libraries:** base64, pandas, streamlit, plotly, geopandas
-- **Source code:** [github.com/spark-brc/crb_apexmf](https://github.com/spark-brc/crb_apexmf)
-""")
 
-ws_nams, full_paths = utils.get_watershed_list()
-col1, line, col2, col3, col4 = st.beta_columns([0.2, 0.05, 0.1, 0.15, 0.2])
-
-area = col1.selectbox(
-    "Select Watershed", ws_nams
-    )
-stdate, eddate = utils.define_sim_period(area)
-valstyr, valedyr, sims, obds = utils.get_val_info(area)
-
+with col1:
+    shp = st.selectbox('Select Shapefile:', ['AGM', 'TGM'])
 with line:
     st.markdown(LINE, unsafe_allow_html=True)
 with col2:
-    # st.markdown(
-    #     "<h3 style='text-align: center;'>Simulation period</h3>",
-    #     unsafe_allow_html=True)
-    st.markdown(
-        """
-        ### Simulation period
-        """)
-with col3:
-    st.markdown(
-        """
-        ### Streamgage station (Reach ID)
-        """)
-with col2:
-    st.markdown('## {} - {}'.format(valstyr, valedyr))
-    st.markdown('---')
-with col3:
-    st.markdown('## {}'.format(", ".join([str(x) for x in sims])))
-    st.markdown('---')
+    output_df = st.selectbox('Select Output file:', ['ACY', 'AGZ'])
 
 
-def main(df, sims, mfig):
-    tdf = st.beta_expander('{} Dataframe for Simulated and Observed Stream Discharge'.format(area))
-    tdf.dataframe(df, height=500)
-    tdf.markdown(utils.filedownload(df), unsafe_allow_html=True)
-    st.markdown("## Hydrographs for stream discharge")
-    st.plotly_chart(utils.get_plot(df, sims), use_container_width=True)
-    stats_df = utils.get_stats_df(df, sims)
-
-    with col4:
-        st.markdown(
-            """
-            ### Objective Functions
-            """)
-        st.dataframe(stats_df.T)
-
-    tcol1, tcol2 = st.beta_columns([0.55, 0.45])
-    tcol1.markdown("## Flow Duration Curve")
+def main(dff, dfmin, dfmax, yrmin, yrmax, sel_yr):
+    with line2:
+        st.markdown(LINE, unsafe_allow_html=True)
+    tdf01 = st.beta_expander('{} Dataframe from {} output'.format(sel_var, output_df))
+    with tdf01:
+        st.dataframe(dff, height=500)
+        st.markdown(utils.filedownload(dff), unsafe_allow_html=True)
+    st.write('___')
+    st.write('## Spatio-temporal variation')
+    sel_yr = st.slider(
+        "Select Time:", int(yrmin), int(yrmax))
+    st.write('### Example 1 of map layout')
+    utils.viz_biomap2(shp, dff, dfmin, dfmax, sel_yr)
+    st.write('### Example 2 of map layout')
+    mcol1, mcol2 = st.beta_columns([0.5, 0.5])    
+    with mcol1:
+        utils.viz_biomap2('AGM', dff, dfmin, dfmax, sel_yr)
+    with mcol2:
+        utils.viz_biomap2('TGM', dff, dfmin, dfmax, sel_yr)
+    st.write('___')
+    st.write('## Check correlation between variables')
+    vcol1, vcol2 = st.beta_columns([0.5, 0.5])
+    with vcol1:
+        v1 = st.multiselect('Select Reach Vars on X-axis:', ot_vars)
+    with vcol2:
+        v2 = st.multiselect('Select Reach Vars on Y-axis:', ot_vars)
+    st.plotly_chart(utils.get_corr_plot(df, v1, v2), use_container_width=True)
 
     
-    pcol1, pcol2= st.beta_columns([0.1, 0.9])
-    yscale = pcol1.radio("Select Y-axis scale", ["Linear", "Logarithmic"])
-    pcol2.plotly_chart(utils.get_fdcplot(df, sims, yscale), use_container_width=True)
-    # pcol3.image('tenor.gif')
-    
-    wb = st.beta_expander('Waterbalance Map (ing)')
-    wb.image('tenor.gif')
-
-    # NOTE: water balance map in progress
-    # st.markdown("## Waterbalance Map (ing)")
-    # st.plotly_chart(
-    #     mfig,
-    #     use_container_width=True
-    #     )
-
-    wtdf = st.beta_expander('Groundwater Simulation for {}'.format(area))
-    wtdf.image('tenor.gif')
-    mddf = st.beta_expander('{} Model Description'.format(area))
-    # tdf.dataframe(df, height=500)
-
-    intro_markdown = utils.read_markdown_file(
-        os.path.join("./resources/watershed", "Animas/description", "Animas APEX-MODFLOW.md")
-    )
-    mddf.markdown(intro_markdown, unsafe_allow_html=True)
-    # mddf.markdown(intro_markdown, unsafe_allow_html=True)
 
 
 @st.cache
 def load_data():
-    time_step = 'M'
-    caldate = '1/1/{}'.format(valstyr)
-    eddate = '12/31/{}'.format(valedyr)
+    if output_df == 'ACY':
+        df = pd.read_csv(
+                    "./resources/CONUNN_AGM.ACY",
+                    delim_whitespace=True,
+                    skiprows=8,
+                    header=0,
+                    )
+    elif output_df == 'AGZ':
+        df = pd.read_csv(
+                    "./resources/CONUNN_AGM.AGZ",
+                    delim_whitespace=True,
+                    skiprows=8,
+                    header=0,
+                    )
+    return df
 
-    df = utils.get_sim_obd(area, stdate, time_step, sims, obds, caldate, eddate)
-    mfig = utils.viz_biomap()
-    return df, sims, mfig
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.CRITICAL)
-    df, sims, mfig= load_data()
-    main(df, sims, mfig)
+    df = load_data()
+    tdf02 = st.beta_expander('Dataframe from {} output'.format(output_df))
+    with tdf02:
+        st.dataframe(df)
+    if output_df == 'ACY':
+        ot_vars = utils.get_acy_vars()
+    elif output_df == 'AGZ':
+        ot_vars = utils.get_agz_vars()
+    with col3:
+        sel_var = st.selectbox('Select Output Variable:', ot_vars, index=2)    
+    dff, dfmin, dfmax, yrmin, yrmax = utils.read_acy(df, sel_var)
+    
+
+
+
+
+    # if rchids2 and obsids2 and wnam:
+    main(dff, dfmin, dfmax, yrmin, yrmax, yrmin)
+
