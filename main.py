@@ -60,14 +60,16 @@ def main(dff, dfmin, dfmax, yrmin, yrmax, sel_yr):
     st.write('## Spatio-temporal variation')
     sel_yr = st.slider(
         "Select Time:", int(yrmin), int(yrmax))
-    st.write('### Example 1 of map layout')
-    utils.viz_biomap2(shp, dff, dfmin, dfmax, sel_yr)
-    st.write('### Example 2 of map layout')
-    mcol1, mcol2 = st.beta_columns([0.5, 0.5])    
-    with mcol1:
-        utils.viz_biomap2('AGM', dff, dfmin, dfmax, sel_yr)
-    with mcol2:
-        utils.viz_biomap2('TGM', dff, dfmin, dfmax, sel_yr)
+    map01_exp = st.beta_expander('Example 1 of map layout', expanded=True)
+    with map01_exp:
+        utils.viz_biomap2(shp, dff, dfmin, dfmax, sel_yr)
+    map02_exp = st.beta_expander('Example 2 of map layout', expanded=True)
+    with map02_exp:
+        mcol1, mcol2 = st.beta_columns([0.5, 0.5])    
+        with mcol1:
+            utils.viz_biomap2('AGM', dff, dfmin, dfmax, sel_yr)
+        with mcol2:
+            utils.viz_biomap2('TGM', dff, dfmin, dfmax, sel_yr)
     st.write('___')
     st.write('## Check correlation between variables')
     vcol1, vcol2 = st.beta_columns([0.5, 0.5])
