@@ -13,7 +13,7 @@ import time
 from io import StringIO
 from shapely.geometry import shape
 import json
-import xmltodict
+# import xmltodict
 import utils
 
 pd.options.mode.chained_assignment = None
